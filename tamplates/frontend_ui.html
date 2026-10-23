@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NVIDIA Neural-Hydrology Edge Matrix</title>
+    <style>
+        :root {
+            --nvidia-green: #76b900;
+            --nvidia-dark: #000000;
+            --cyber-gray: #1a1a1a;
+            --glass-panel: rgba(26, 26, 26, 0.75);
+            --text-glow: rgba(118, 185, 0, 0.4);
+            --alert-red: #ff3333;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            background-color: var(--nvidia-dark);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: rgba(0, 0, 0, 0.9);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--nvidia-green);
+            box-shadow: 0 0 20px var(--text-glow);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #ffffff;
+        }
+
+        header h1 span { color: var(--nvidia-green); font-weight: bold; }
+
+        .btn-panel button {
+            padding: 10px 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 12px;
+            background: transparent;
+            color: #ffffff;
+            border: 1px solid #ffffff;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-nvidia { border-color: var(--nvidia-green) !important; color: var(--nvidia-green) !important; }
+        .btn-nvidia:hover { background: var(--nvidia-green); color: #000000 !important; box-shadow: 0 0 15px var(--nvidia-green); }
+        .btn-danger { border-color: var(--alert-red) !important; color: var(--alert-red) !important; }
+        .btn-danger:hover { background: var(--alert-red); color: #ffffff !important; box-shadow: 0 0 15px var(--alert-red); }
+
+        .main-container { display: flex; flex: 1; height: calc(100vh - 82px); }
+
+        .vector-canvas-pane {
+            width: 60%;
+            height: 100%;
+            background-color: #050505;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid #222;
+        }
+
+        .grid-lines {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(118, 185, 0, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(118, 185, 0, 0.03) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        .hardware-watermark {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            font-size: 11px;
+            color: #444;
+            letter-spacing: 1px;
+        }
+        .telemetry-node {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 5;
+        }
+
+        .node-core {
+            width: 14px;
+            height: 14px;
+            background-color: var(--nvidia-green);
+            border-radius: 2px;
+            box-shadow: 0 0 15px var(--nvidia-green);
+            margin: 0 auto;
+            transition: all 0.4s ease;
+        }
+
+        .node-pulse-ring {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 1px solid var(--nvidia-green);
+            animation: kernel-pulse 2s infinite linear;
+            pointer-events: none;
+        }
+
+        .node-tag {
+            background-color: rgba(0, 0, 0, 0.85);
+            border: 1px solid #333;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-top: 10px;
+            white-space: nowrap;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+        }
+
+        .control-sidebar {
+            width: 40%;
+            background-color: #0b0b0b;
+            padding: 30px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .panel-section-title {
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: #666;
+            margin: 0;
+            text-transform: uppercase;
+            border-bottom: 1px solid #222;
+            padding-bottom: 8px;
+        }
+
+        .alert-banner-matrix {
+            background-color: rgba(255, 51, 51, 0.1);
+            border: 1px solid var(--alert-red);
+            color: var(--alert-red);
+            padding: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.2);
+        }
+
+        .hardware-telemetry-card {
+            background-color: #111111;
+            border: 1px solid #222;
+            padding: 20px;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .card-header-metrics {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-node-title { margin: 0; font-size: 14px; font-weight: bold; color: #fff; }
+        
+        .status-badge { font-size: 10px; padding: 2px 8px; font-weight: bold; border-radius: 2px; }
+        .status-nominal { background-color: rgba(118, 185, 0, 0.15); color: var(--nvidia-green); border: 1px solid var(--nvidia-green); }
+        .status-critical { background-color: rgba(255, 51, 51, 0.15); color: var(--alert-red); border: 1px solid var(--alert-red); animation: threat-blink 1s infinite alternate; }
+
+        .pipeline-bar-wrapper { width: 100%; height: 4px; background-color: #222; margin-top: 5px; overflow: hidden; }
+        .pipeline-bar-fill { height: 100%; width: 0%; transition: width 0.6s cubic-bezier(0.1, 0.8, 0.2, 1); }
+
+        @keyframes kernel-pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(4); opacity: 0; } }
+        @keyframes threat-blink { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>⚡ NVIDIA <span>Jetson Early-Warning Node Array</span> // Hydrology Core</h1>
+        <div class="btn-panel">
+            <button class="btn-nvidia" onclick="loadTelemetry('/api/v1/telemetry/nominal')">🔄 Sync Telemetry Stream</button>
+            <button class="btn-danger" onclick="loadTelemetry('/api/v1/telemetry/cloudburst')">🚨 Trigger Anomaly Simulation</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="vector-canvas-pane">
+            <div class="grid-lines"></div>
+            <div class="hardware-watermark">PROCESSING UNIT REFERENCE ARCHITECTURE: NVIDIA JETSON CUDA-X CORE COPROCESSING ENVIRONMENT // OFFLINE MATRIX ACTIVE</div>
+            <div id="vector-nodes-mount"></div>
+        </div>
+        
+        <div class="control-sidebar">
+            <div id="crisis-matrix-alert" class="alert-banner-matrix">
+                [SYSTEM FAULT ALERT]: EXTREME CLOUDBURST SURGE DISCOVERED // EXECUTING AUTOMATED COMMAND DISPATCHES
+            </div>
+           
+<h2 class="panel-section-title">Automatic Rainfall Monitoring</h2>
+
+<div id="rainfall-container" class="hardware-telemetry-card">
+    Connecting to weather service...
+</div>
+
+<p id="rainfall-updated" style="font-size:11px;color:#888;">
+    Waiting for first update...
+</p>
+
+<h2 class="panel-section-title">Active Stream Metrics</h2>
+
+<div id="hardware-cards-container">
+    Awaiting link stream serialization...
+</div>
+
+        </div>
+    </div>
+
+    <script>
+        function loadTelemetry(endpoint) {
+            fetch(endpoint)
+                .then(res => res.json())
+                .then(payload => {
+                    const cardsBox = document.getElementById('hardware-cards-container');
+                    const canvasBox = document.getElementById('vector-nodes-mount');
+                    
+                    cardsBox.innerHTML = '';
+                    canvasBox.innerHTML = '';
+                    let activeAnomalies = false;
+
+                    const layoutGrid = {
+                        "shimla_01": { top: "60%", left: "50%" },
+                        "manali_02": { top: "35%", left: "62%" },
+                        "dharamshala_03": { top: "40%", left: "28%" }
+                    };
+
+                    payload.nodes.forEach(node => {
+                        const statusClass = node.system_status === "CRITICAL" ? "status-critical" : "status-nominal";
+                        const nodeColor = node.system_status === "CRITICAL" ? "var(--alert-red)" : "var(--nvidia-green)";
+                        const barColor = node.system_status === "CRITICAL" ? "var(--alert-red)" : "var(--nvidia-green)";
+                        
+                        if(node.system_status === "CRITICAL") activeAnomalies = true;
+
+                        const pos = layoutGrid[node.uuid] || { top: "50%", left: "50%" };
+                        canvasBox.innerHTML += `
+                            <div class="telemetry-node" style="top: ${pos.top}; left: ${pos.left};">
+                                <div class="node-core" style="background-color: ${nodeColor}; box-shadow: 0 0 15px ${nodeColor};">
+                                    <div class="node-pulse-ring" style="border-color: ${nodeColor}"></div>
+                                </div>
+                                <div class="node-tag">
+                                    <span style="color: #666;">[ID]:</span> ${node.uuid.toUpperCase()}<br>
+                                    <span style="color: ${nodeColor}; font-weight:bold;">VAL: ${node.hazard_vector_index}%</span>
+                                </div>
+                            </div>
+                        `;
+
+                        cardsBox.innerHTML += `
+                            <div class="hardware-telemetry-card">
+                                <div class="card-header-metrics">
+                                    <h3 class="card-node-title">${node.region_name}</h3>
+                                    <span class="status-badge ${statusClass}">${node.system_status}</span>
+                                </div>
+                                <div style="font-size:11px; color:#555; margin-bottom:12px;">EDGE HARDWARE: ${node.hardware_profile} // ACCELERATION LATENCY: ${node.cycle_latency_ms}ms</div>
+                                
+                                <div class="metric-row">
+                                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                                        <span>Hazard Index Threat Level</span>
+                                        <span style="color:${nodeColor}; font-weight:bold;">${node.hazard_vector_index}%</span>
+                                    </div>
+                                    <div class="pipeline-bar-wrapper">
+                                        <div class="pipeline-bar-fill" style="width: ${node.hazard_vector_index}%; background-color: ${barColor};"></div>
+                                    </div>
+                                </div>
+
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:11px; margin-top:14px; color:#888;">
+                                    <div>⚡ RAIN NOWCAST: <span style="color:#fff">${node.telemetry.rainfall_nowcast_mm}mm</span></div>
+                                    <div>⚡ SOIL SATURATION: <span style="color:#fff">${node.telemetry.soil_saturation_pct}%</span></div>
+                                    <div style="grid-column: span 2">⚡ STREAM CONVERGENCE FLUID SPEED: <span style="color:#fff">${node.telemetry.river_gauge_velocity_ms} m/s</span></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    document.getElementById('crisis-matrix-alert').style.display = activeAnomalies ? 'block' : 'none';
+                })
+                .catch(err => console.error("Telemetry Stream Sync Failure:", err));
+        }
+
+
+
+        async function loadRainfall() {
+            const container = document.getElementById("rainfall-container");
+            const updated = document.getElementById("rainfall-updated");
+        
+            try {
+                const response = await fetch("/api/v1/rainfall");
+        
+                if (!response.ok) {
+                    throw new Error("Weather API request failed");
+                }
+        
+                const data = await response.json();
+        
+                container.innerHTML = data.regions.map(region => {
+                    if (region.status !== "LIVE") {
+                        return `
+                            <div style="padding:12px 0;border-bottom:1px solid #333;">
+                                <strong>${region.region_name}</strong>
+                                <div style="color:#ff6666;margin-top:6px;">
+                                    Weather data unavailable
+                                </div>
+                            </div>
+                        `;
+                    }
+        
+                    const current = Number(
+                        region.current_precipitation_mm ?? 0
+                    ).toFixed(1);
+        
+                    const rain = Number(
+                        region.current_rain_mm ?? 0
+                    ).toFixed(1);
+        
+                    const next6 = Number(
+                        region.next_6_hours_precipitation_mm ?? 0
+                    ).toFixed(1);
+        
+                    return `
+                        <div style="padding:14px 0;border-bottom:1px solid #333;">
+                            <div style="display:flex;justify-content:space-between;
+                                        gap:10px;align-items:center;">
+                                <strong>${region.region_name}</strong>
+                                <span style="color:#76b900;font-size:10px;">
+                                    ● API CONNECTED
+                                </span>
+                            </div>
+        
+                            <div style="display:grid;grid-template-columns:1fr 1fr;
+                                        gap:12px;margin-top:14px;">
+                                <div>
+                                    <div style="color:#888;font-size:11px;">
+                                        Current precipitation
+                                    </div>
+                                    <div style="font-size:22px;color:white;">
+                                        ${current} mm
+                                    </div>
+                                </div>
+        
+                                <div>
+                                    <div style="color:#888;font-size:11px;">
+                                        Current rain
+                                    </div>
+                                    <div style="font-size:22px;color:#76b900;">
+                                        ${rain} mm
+                                    </div>
+                                </div>
+        
+                                <div style="grid-column:span 2;">
+                                    <div style="color:#888;font-size:11px;">
+                                        Forecast precipitation · next 6 hours
+                                    </div>
+                                    <div style="font-size:18px;color:white;">
+                                        ${next6} mm
+                                    </div>
+                                </div>
+                            </div>
+        
+                            <div style="font-size:10px;color:#666;margin-top:10px;">
+                                Weather time: ${region.weather_time ?? "Unavailable"}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+        
+                updated.textContent =
+                    "Dashboard refreshed: " +
+                    new Date(data.updated_at).toLocaleString();
+        
+            } catch (error) {
+                container.textContent =
+                    "Unable to load rainfall data. Check your connection and retry.";
+                updated.textContent = "Weather service unavailable.";
+                console.error("Rainfall loading error:", error);
+            }
+        }
+
+        window.onload = function() {
+            loadTelemetry('/api/v1/telemetry/nominal');
+            loadRainfall();
+            setInterval(loadRainfall, 60 * 1000);
+        };
+    </script>
+</body>
+</html>
